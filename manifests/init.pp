@@ -98,9 +98,14 @@
 #   or in percentage of available storage space using the % suffix.
 #   Default: 1G
 #
+# [*storage_dir*]
+#   Cache file path
+#   Default: /var/lib/varnish/${instance}
+#   Specify 'malloc' to keep the cache wholly in memory.
+#
 # [*storage_file*]
 #   Cache file location
-#   Default: /var/lib/varnish/$INSTANCE/varnish_storage.bin
+#   Default: /var/lib/varnish/${instance}/varnish_storage.bin
 #   Specify 'malloc' to keep the cache wholly in memory.
 #
 # [*vcl_template*]
@@ -333,6 +338,7 @@ class varnish (
   $secret_file          = params_lookup( 'secret_file' ),
   $ttl                  = params_lookup( 'ttl' ),
   $storage_size         = params_lookup( 'storage_size' ),
+  $storage_dir          = params_lookup( 'storage_dir' ),
   $storage_file         = params_lookup( 'storage_file' ),
   $source               = params_lookup( 'source' ),
   $source_dir           = params_lookup( 'source_dir' ),
@@ -563,6 +569,28 @@ class varnish (
       replace => $varnish::manage_file_replace,
       audit   => $varnish::manage_audit,
       noop    => $varnish::noops,
+    }
+  }
+
+
+  ### If using file caching, make sure parent directories are created
+  if $varnish::storage_file != 'malloc' {
+    exec{'varnish_cache_dir':
+      command     => "/bin/mkdir -p ${varnish::storage_dir}",
+      unless      => "/usr/bin/test -d ${varnish::storage_dir}",
+      subscribe   => File['varnish.conf'],
+      refreshonly => true,
+      noop        => $varnish::noops,
+      before      => File['varnish_cache_dir_perms'],
+    }
+
+    file {'varnish_cache_dir_perms':
+      ensure => directory,
+      path   => $varnish::storage_dir,
+      owner  => $varnish::process_user,
+      group  => $varnish::process_user,
+      mode   => 0755,
+      noop   => $varnish::noops,
     }
   }
 
